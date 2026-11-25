@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>大川视界·中希文明互鉴青年行 行程轨迹图（实际行程版 v2.3）</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <style>
+    *{box-sizing:border-box;}
+    html,body{margin:0;height:100%;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
+    #app{display:flex;flex-direction:column;height:100%;}
+    header{background:#0b3d91;color:#fff;padding:10px 16px;font-size:15px;
+      display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
+    header small{font-weight:normal;opacity:.85;font-size:12px;}
+    #main{flex:1;display:flex;min-height:0;}
+    #sidebar{width:240px;overflow-y:auto;background:#f7f9fc;border-right:1px solid #ddd;padding:8px;}
+    #sidebar .hint{font-size:12px;color:#888;padding:2px 6px 8px;}
+    .node-item{padding:8px 10px;margin-bottom:6px;background:#fff;border:1px solid #e3e8f0;
+      border-radius:8px;cursor:pointer;font-size:13px;color:#333;}
+    .node-item:hover{border-color:#0b3d91;}
+    .node-item.active{background:#0b3d91;color:#fff;border-color:#0b3d91;}
+    .node-item .d{font-size:11px;opacity:.7;}
+    .tag{display:inline-block;background:#f6c343;color:#7a4b00;font-size:10px;border-radius:8px;
+      padding:0 5px;margin-left:4px;}
+    #map{flex:1;background:#eef2f7;}
+    #panel{background:#fff;border-top:1px solid #d9d9d9;padding:8px 14px;font-size:13px;
+      display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    #status{flex:1;color:#333;min-width:160px;}
+    button{border:1px solid #0b3d91;background:#fff;color:#0b3d91;border-radius:14px;
+      padding:4px 14px;cursor:pointer;}
+    button:hover{background:#0b3d91;color:#fff;}
+    #progress{height:6px;background:#e5e5e5;border-radius:3px;overflow:hidden;width:180px;}
+    #progress>div{height:100%;background:#0b3d91;width:0;}
+    .legend{background:rgba(255,255,255,.92);padding:8px 10px;border-radius:6px;
+      font-size:12px;color:#333;line-height:2;}
+    .legend i{display:inline-block;width:22px;height:3px;vertical-align:middle;margin-right:6px;}
+    .node-pop{font-size:13px;max-width:260px;}
+    .node-pop h4{margin:0 0 4px;color:#0b3d91;}
+    .node-pop img{width:100%;border-radius:4px;margin-top:6px;}
+    @media (max-width:720px){
+      #main{flex-direction:column;}
+      #sidebar{width:100%;height:118px;display:flex;overflow-x:auto;overflow-y:hidden;gap:6px;
+        border-right:none;border-bottom:1px solid #ddd;}
+      .node-item{min-width:124px;height:86px;margin-bottom:0;}
+      #progress{width:120px;}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span>🇬🇷 大川视界·中希文明互鉴青年行 行程轨迹图</span>
+    <small>2026.1.27–2.12 ｜ 实际行程版 v2.3 ｜ 底图打不开就点右上角图层按钮</small>
+  </header>
+  <div id="main">
+    <aside id="sidebar"><div class="hint">点击节点跳转；黄色标签为途中打卡点</div></aside>
+    <div id="map"></div>
+  </div>
+  <div id="panel">
+    <button id="btnPlay">暂停</button>
+    <button id="btnReset">重置</button>
+    <div id="progress"><div id="bar"></div></div>
+    <span id="status">准备播放…</span>
+  </div>
+</div>
+
+<script>
+/* ===== 地图库自动降级加载 ===== */
+function loadLeaflet(srcs, onOk, onFail){
+  if (srcs.length === 0){ onFail(); return; }
+  var s = document.createElement('script');
+  s.src = srcs[0];
+  s.onload = onOk;
+  s.onerror = function(){ loadLeaflet(srcs.slice(1), onOk, onFail); };
+  document.head.appendChild(s);
+}
+loadLeaflet([
+  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+  'https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+], initMap, function(){
+  document.getElementById('map').innerHTML =
+    '<div style="padding:40px;text-align:center;color:#666;">地图库加载失败：请检查网络后刷新（Ctrl+F5）</div>';
+});
+
+function initMap(){
+  /* ===== 实际行程数据（2026.1.27–2.12，AI提取＋本人核验） ===== */
+  const nodes = [
+    {name:"成都 · 出发",      coords:[30.5728,104.0668], date:"2026-01-27", type:"depart", icon:"✈️",
+     note:"川大出发，乘航班直飞罗马", tag:"", photo:""},
+    {name:"罗马 · 自由行",    coords:[41.9028,12.4964],  date:"2026-01-27～28", type:"visit", icon:"🏛️",
+     note:"提前抵达，自由游览一日", tag:"", photo:""},
+    {name:"雅典 · 中转",      coords:[37.9838,23.7275],  date:"2026-01-28", type:"transit", icon:"✈️",
+     note:"转机，飞往科孚岛", tag:"", photo:""},
+    {name:"科孚岛 · 伊奥尼亚大学", coords:[39.6243,19.9217], date:"2026-01-28～02-04", type:"course", icon:"🏰",
+     note:"项目驻地：课堂授课＋科孚要塞、博物馆现场教学", tag:"", leg:"sea", photo:""},
+    {name:"约阿尼纳",        coords:[39.6676,20.8510],  date:"2026-02-04～06", type:"site", icon:"🏛️",
+     note:"自科孚渡海转陆路抵达；拜占庭博物馆等", tag:"", photo:""},
+    {name:"迈泰奥拉修道院",    coords:[39.7217,21.6320],  date:"2026-02-06", type:"site", icon:"⛪",
+     note:"途中打卡：迈泰奥拉修道院（“天空之城”）", tag:"途中打卡", photo:""},
+    {name:"拉里萨",          coords:[39.6390,22.4192],  date:"2026-02-06～08", type:"site", icon:"🏛️",
+     note:"抵达拉里萨；市长接见", tag:"", photo:""},
+    {name:"温泉关",          coords:[38.7974,22.5356],  date:"2026-02-08", type:"site", icon:"⚔️",
+     note:"途中打卡：温泉关战役遗址", tag:"途中打卡", photo:""},
+    {name:"德尔斐",          coords:[38.4824,22.5010],  date:"2026-02-08", type:"site", icon:"🏛️",
+     note:"途中打卡：阿波罗神庙与德尔斐考古博物馆", tag:"途中打卡", photo:""},
+    {name:"雅典 · 卫城",      coords:[37.9715,23.7267],  date:"2026-02-08～11", type:"site", icon:"🏛️",
+     note:"雅典卫城及博物馆、希腊国家考古博物馆", tag:"", photo:""},
+    {name:"阿布扎比 · 中转",   coords:[24.4539,54.3773],  date:"2026-02-11～12", type:"transit", icon:"✈️",
+     note:"中转阿布扎比国际机场", tag:"", photo:""},
+    {name:"北京 · 抵京",      coords:[39.9042,116.4074], date:"2026-02-12", type:"return", icon:"🛬",
+     note:"平安抵京，行程结束", tag:"", photo:""}
+  ];
+
+  /* ===== 地图与三个备用底图 ===== */
+  const map = L.map('map', {zoomControl:true, worldCopyJump:true}).setView([30, 30], 4);
+  const carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap © CARTO'});
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:19, attribution:'© OpenStreetMap'});
+  const gaode = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    {subdomains:'1234', maxZoom:18, attribution:'高德底图（备用，节点或略有偏移）'});
+  carto.addTo(map);
+  L.control.layers({'浅色底图(默认)':carto, '开放街道图OSM':osm, '高德街道(国内最快)':gaode},
+    null, {position:'topright'}).addTo(map);
+  map.fitBounds(L.latLngBounds(nodes.map(n => n.coords)), {padding:[30,30], maxZoom:6});
+
+  /* ===== 图例 ===== */
+  const legend = L.control({position:'bottomleft'});
+  legend.onAdd = function(){
+    const div = L.DomUtil.create('div','legend');
+    div.innerHTML = '<i style="background:#1f6feb;border-top:2px dashed #1f6feb;height:0;"></i>国际航线<br>' +
+                    '<i style="background:#0f8b8d;border-top:2px dashed #0f8b8d;height:0;"></i>渡海<br>' +
+                    '<i style="background:#b3551f;"></i>陆路<br>✈️ 当前行进位置';
+    return div;
+  };
+  legend.addTo(map);
+
+  /* ===== 分段线：航线虚线 / 渡海青绿虚线 / 陆路赭色实线 ===== */
+  function segStyle(i){
+    const a = nodes[i], b = nodes[i+1];
+    if (a.leg === 'sea') return {color:'#0f8b8d', dashArray:'4 6'};
+    const isFlight = ['depart','transit','return'].includes(a.type)
+                  || ['depart','transit','return'].includes(b.type);
+    return isFlight ? {color:'#1f6feb', dashArray:'6 8'} : {color:'#b3551f', dashArray:null};
+  }
+  const segPolys = [];
+  for (let i=0; i<nodes.length-1; i++){
+    const st = segStyle(i);
+    segPolys.push(L.polyline([nodes[i].coords, nodes[i+1].coords], {
+      color: st.color, weight: 3, opacity: 0.55, dashArray: st.dashArray
+    }).addTo(map));
+  }
+
+  /* ===== 节点、弹窗、侧栏 ===== */
+  const markers = [];
+  const sidebar = document.getElementById('sidebar');
+  function popupHtml(n){
+    const img = n.photo ? `< img src="${n.photo}" alt="${n.name}">` : '';
+    const tag = n.tag ? `<span class="tag">${n.tag}</span>` : '';
+    return `<div class="node-pop"><h4>${n.icon} ${n.name} ${tag}</h4><b>${n.date}</b> · ${n.note}${img}</div>`;
+  }
+  nodes.forEach((n, i) => {
+    const mk = L.marker(n.coords, {
+      icon: L.divIcon({html:`<div style="font-size:20px;">${n.icon}</div>`, className:'', iconSize:[22,22]})
+    }).addTo(map);
+    mk.bindPopup(popupHtml(n));
+    markers.push(mk);
+    const item = document.createElement('div');
+    item.className = 'node-item';
+    const tag = n.tag ? `<span class="tag">${n.tag}</span>` : '';
+    item.innerHTML = `${n.icon} ${n.name} ${tag}<div class="d">${n.date}</div>`;
+    item.addEventListener('click', () => jumpTo(i));
+    sidebar.appendChild(item);
+  });
+  const nodeItems = sidebar.querySelectorAll('.node-item');
+
+  function jumpTo(i){
+    seg = Math.max(0, i-1); frac = 0;
+    draw();
+    map.flyTo(nodes[i].coords, Math.max(map.getZoom(), 8), {duration:1});
+    markers[i].openPopup();
+  }
+
+  /* ===== 动画 ===== */
+  const plane = L.marker(nodes[0].coords, {
+    icon: L.divIcon({html:'<div style="font-size:22px;">✈️</div>', className:'', iconSize:[24,24]}),
+    zIndexOffset: 1000
+  }).addTo(map);
+
+  let seg = 0, frac = 0, playing = true;
+  const SEG_DUR = 5;   /* 每段5秒，11段约55秒一轮 */
+  const statusEl = document.getElementById('status');
+  const barEl = document.getElementById('bar');
+  const btnPlay = document.getElementById('btnPlay');
+  const btnReset = document.getElementById('btnReset');
+
+  function draw(){
+    const a = nodes[seg].coords, b = nodes[seg+1].coords;
+    plane.setLatLng([a[0]+(b[0]-a[0])*frac, a[1]+(b[1]-a[1])*frac]);
+    segPolys.forEach((p,i)=>p.setStyle({weight: i===seg?5:3, opacity: i===seg?1:0.55}));
+    nodeItems.forEach((el,i)=>el.classList.toggle('active', i===seg));
+    barEl.style.width = ((seg+frac)/segPolys.length*100)+'%';
+    statusEl.textContent = `第${seg+1}/${segPolys.length}段：${nodes[seg].name} → ${nodes[seg+1].name}`;
+  }
+
+  setInterval(() => {
+    if (!playing) return;
+    frac += 0.05 / SEG_DUR;
+    if (frac >= 1){ frac = 0; seg++; if (seg >= segPolys.length){ seg = 0; frac = 0; } }
+    draw();
+  }, 50);
+  draw();
+
+  btnPlay.addEventListener('click', () => {
+    playing = !playing;
+    btnPlay.textContent = playing ? '暂停' : '继续';
+  });
+  btnReset.addEventListener('click', () => { seg = 0; frac = 0; draw(); });
+}
+</script>
+</body>
+</html>
